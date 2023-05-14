@@ -1,2 +1,3 @@
 # IncomeAnalysis
 Analysis of Income in the US
+This study analyzes data to determine the factors that most strongly influence an individual's income in the United States. The dataset groups individuals into those who make over $50,000 and those who make less than or equal to $50,000 per year. The study examines variables such as age and education to determine their correlation with income. The data was extracted from a census database and analyzed using a multiple logistic regression model. The final model found that variables such as race, workclass, and hours worked per week had the strongest correlation with income. The study also found that age and education categories had a strong correlation with predicting an individual's income.
