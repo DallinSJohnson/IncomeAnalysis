@@ -1,0 +1,194 @@
+---
+title: "CDA Final Project Submission"
+author: "Dallin"
+date: "`r Sys.Date()`"
+output:
+  word_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+options(repos = c(CRAN = "http://cran.rstudio.com"))
+install.packages("pROC")
+library(readr)
+library(utils)
+library(dplyr)
+library(ggplot2)
+library(car)
+library(pROC)
+```
+#Download Dataset
+```{r}
+adult.data <- read_csv("~/Downloads/adult.data")
+#View(adult.data) 
+```
+#Clean Data and filter for only the US
+```{r}
+colnames(adult.data) <- c("Age", "Workclass", "fnlwgt", "Education", "Education-Num", "Marital-Status", "Occupation", "Relationship", "Race", "Sex", "Capital-Gain", "Capital-Loss", "Hours-per-Week", "Native-Country", "Income")
+
+#Removing random NULL values since the null values are randomly distributed throughout the dataset. 
+adult.data[adult.data == "?"] <- NA
+adult.data <- na.omit(adult.data)
+
+#Filter for the United States
+united.states <- filter(adult.data, `Native-Country` == "United-States")
+#View(united.states)
+
+#Removing variables that will not be used in the analysis
+#I'm removing native-country since we are only analyzing people with "US" as their native country
+adult.data <- subset(united.states, select = c("Age", "Workclass", "Education", "Marital-Status", "Occupation", "Relationship", "Race", "Sex", "Hours-per-Week", "Income"))
+
+#Converting "Income" variable into a binary variable. If income >50K than = 1, if income <=50K than = 0. 
+adult.data$Income <- ifelse(adult.data$Income == ">50K", 1, adult.data$Income)
+adult.data$Income <- ifelse(adult.data$Income == "<=50K", 0, adult.data$Income)
+#View(adult.data)
+```
+#Descriptive Statistics
+```{r}
+#Mean of continuous variables
+mean(adult.data$Age)
+mean(adult.data$`Hours-per-Week`)
+#Median of continuous variables
+median(adult.data$Age)
+median(adult.data$`Hours-per-Week`)
+#Standard Deviation
+sd(adult.data$Age)
+sd(adult.data$`Hours-per-Week`)
+
+#Proportions of Categorical variables
+work.prop <- prop.table(table(adult.data$Workclass))
+education.prop <- prop.table(table(adult.data$Education))
+marital.prop <- prop.table(table(adult.data$`Marital-Status`))
+occupation.prop <- prop.table(table(adult.data$Occupation))
+relationship.prop <- prop.table(table(adult.data$Relationship))
+race.prop <- prop.table(table(adult.data$Race))
+sex.prop <- prop.table(table(adult.data$Sex))
+income.prop <- prop.table(table(adult.data$Income))
+```
+#Descriptive Statistic Visuals
+
+```{r}
+#Histograms of Continuous Variables
+hist(adult.data$Age, main = "Ages of Individuals", xlab = "Age", ylab = "Number of Individuals", col = "lightblue", xlim = c(min(adult.data$Age), max(adult.data$Age)))
+hist(adult.data$`Hours-per-Week`, main = "Hours per Week", xlab = "Hours per Week", ylab = "Number of Individuals", col = "lightblue", xlim = c(min(adult.data$`Hours-per-Week`), max(adult.data$`Hours-per-Week`)))
+
+#Proportions of Categorical Data
+work.prop
+education.prop
+marital.prop
+occupation.prop
+relationship.prop
+race.prop
+sex.prop
+income.prop
+```
+#Model Creation and Correlation Analysis
+```{r}
+adult.data$Income <- as.numeric(adult.data$Income)
+log.model <- glm(Income~Age+Workclass+Education+`Marital-Status`+Occupation+Relationship+Race+Sex+`Hours-per-Week`, data = adult.data, family = "binomial")
+vif(log.model)
+
+#Took out the variables that were too closely correlated to other variables in the dataset. 
+adj.log.model <- glm(Income~Age+Workclass+Education+Occupation+Race+Sex+`Hours-per-Week`, data = adult.data, family = "binomial")
+vif(adj.log.model)
+
+#Closer look at the correlation between Marital-status and relationship
+relationship.data  <- adult.data[,4:6]
+#View(relationship.data)
+#It makes sense that the Marital-Status variable would be closely related/correlated to the Relationship variable.
+```
+#Prevented overfitting the model. 
+```{r}
+new.model.one <- glm(Income~Age+Workclass+Education+Race+Sex+`Hours-per-Week`, data = adult.data, family = "binomial")
+#removing occupation in order to prevent over fitting since it accounts for so many variables. and it has a VIF over 2.5!
+#summary(new.model.one)
+```
+
+```{r}
+# assume your data frame is called 'my_data'
+# and your response variable is called 'outcome'
+
+# perform forward stepwise selection
+model_forward <- glm(Income ~ 1, data = adult.data, family = binomial())
+model_forward <- step(model_forward, direction = "forward")
+
+# perform backward stepwise selection
+model_backward <- glm(Income~Age+Workclass+Education+Race+Sex+`Hours-per-Week`, data = adult.data, family = binomial())
+model_backward <- step(model_backward, direction = "backward")
+
+log.model <- glm(Income~Age+Workclass+Education+`Marital-Status`+Occupation+Relationship+Race+Sex+`Hours-per-Week`, data = adult.data, family = "binomial")
+#summary(log.model)
+#drop1(log.model, test = "Chisq")
+```
+#Education Variable
+```{r}
+#ALthough education increases the amount of variables by a lot, I think I'm safe against overfitting since I have over 24K observations
+#make sure to talk about the 1:10 ratio of variables and observations.
+```
+#Final Model?
+```{r}
+final.model <- glm(Income~Age+Workclass+Education+Race+Sex+`Hours-per-Week`, data = adult.data, family = "binomial")
+summary(final.model)
+drop1(log.model,test = "Chisq")
+
+#Coefficient of the final model
+coef(final.model)
+
+#Equation for the final model
+paste("logit(p) = ", round(coef(final.model)[1], 4), "+", 
+      paste(round(coef(final.model)[-1], 4), names(coef(final.model)[-1]), collapse = " + "))
+```
+#Plotting the final model
+```{r}
+adult.data$prob <- predict(final.model, type = "response")
+#Plot of predicted values vs. actual values
+ggplot(adult.data, aes(x = Income, y = prob)) +
+  geom_smooth(method = "glm", method.args = list(family = "binomial"), se = FALSE) +
+  geom_point(alpha = 0.3) +
+  labs(title = "Logistic Regression Plot", x = "Actual Income", y = "Predicted Probability")
+```
+#Checking accuracy of model against other models
+```{r}
+#Final model
+pred_probs <- predict(final.model, type = "response")
+pred_class <- ifelse(pred_probs > 0.5, "Yes", "No")
+# Create a confusion matrix
+conf_mat <- table(Predicted = pred_class, Actual = adult.data$Income)
+conf_mat
+accuracy.final <- sum(diag(conf_mat)) / sum(conf_mat)
+accuracy.final
+
+#compared to all of them including martial and relationship
+#Compared to Using them all(except for marital status and relationship because of multicollinearity.) basically i put occupation back
+#the main point here is that they predict it better but i don't know if all those variables would cause overfitting in the future. I feel that the model is complicated enough w/ education but I didn't want to disinclude it becasue it was the main factor of my hypothesis. 
+log.model1 <- glm(Income~Age+Workclass+Education+Occupation+Race+Sex+`Hours-per-Week`, data = adult.data, family = "binomial")
+pred_probs1 <- predict(log.model1, type = "response")
+pred_class1 <- ifelse(pred_probs1 > 0.5, "Yes", "No")
+# Create a confusion matrix
+conf_mat1 <- table(Predicted = pred_class1, Actual = adult.data$Income)
+conf_mat1
+accuracy.final1 <- sum(diag(conf_mat1)) / sum(conf_mat1)
+accuracy.final1
+
+#Finally I wanted to compare the final model I created with a model that would not Include the Education variable(had the largest AIC). 
+log.model2 <- glm(Income~Age+Workclass+Race+Sex+`Hours-per-Week`, data = adult.data, family = "binomial")
+pred_probs2 <- predict(log.model2, type = "response")
+pred_class2 <- ifelse(pred_probs2 > 0.5, "Yes", "No")
+# Create a confusion matrix
+conf_mat2 <- table(Predicted = pred_class2, Actual = adult.data$Income)
+conf_mat2
+accuracy.final2 <- sum(diag(conf_mat2)) / sum(conf_mat2)
+accuracy.final2
+#It was less accurate at predicting. 
+```
+
+
+
+
+
+
+
+
+
+
